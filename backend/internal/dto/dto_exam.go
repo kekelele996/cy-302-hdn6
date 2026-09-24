@@ -12,40 +12,48 @@ type PaperQuestionConfig struct {
 
 // ExamCreateRequest is used by teachers to create an auto-generated paper.
 type ExamCreateRequest struct {
-	Title           string                `json:"title" binding:"required,max=128"`
-	Description     string                `json:"description" binding:"max=2000"`
-	DurationMinutes int                   `json:"duration_minutes" binding:"required,min=1,max=1440"`
-	TotalScore      float64               `json:"total_score" binding:"omitempty,min=0"`
-	StartTime       *time.Time            `json:"start_time"`
-	EndTime         *time.Time            `json:"end_time"`
-	QuestionConfig  []PaperQuestionConfig `json:"question_config" binding:"required,min=1,dive"`
+	Title             string                `json:"title" binding:"required,max=128"`
+	Description       string                `json:"description" binding:"max=2000"`
+	DurationMinutes   int                   `json:"duration_minutes" binding:"required,min=1,max=1440"`
+	TotalScore        float64               `json:"total_score" binding:"omitempty,min=0"`
+	MaxAttempts       int                   `json:"max_attempts" binding:"omitempty,min=1,max=100"`
+	RetakeWaitMinutes int                   `json:"retake_wait_minutes" binding:"omitempty,min=0,max=10080"`
+	StartTime         *time.Time            `json:"start_time"`
+	EndTime           *time.Time            `json:"end_time"`
+	QuestionConfig    []PaperQuestionConfig `json:"question_config" binding:"required,min=1,dive"`
 }
 
 // ExamListQuery filters exam list.
 type ExamListQuery struct {
 	PageQuery
-	Status string `form:"status" binding:"omitempty,oneof=draft published closed"`
+	Status  string `form:"status" binding:"omitempty,oneof=draft published closed"`
 	Keyword string `form:"keyword"`
 }
 
 // ExamResponse is the paper metadata.
 type ExamResponse struct {
-	ID              uint       `json:"id"`
-	Title           string     `json:"title"`
-	Description     string     `json:"description"`
-	TotalScore      float64    `json:"total_score"`
-	DurationMinutes int        `json:"duration_minutes"`
-	StartTime       *time.Time `json:"start_time"`
-	EndTime         *time.Time `json:"end_time"`
-	Status          string     `json:"status"`
-	QuestionCount   int        `json:"question_count"`
-	CreatedBy       uint       `json:"created_by"`
-	CreatedAt       time.Time  `json:"created_at"`
+	ID                uint       `json:"id"`
+	Title             string     `json:"title"`
+	Description       string     `json:"description"`
+	TotalScore        float64    `json:"total_score"`
+	DurationMinutes   int        `json:"duration_minutes"`
+	MaxAttempts       int        `json:"max_attempts"`
+	RetakeWaitMinutes int        `json:"retake_wait_minutes"`
+	StartTime         *time.Time `json:"start_time"`
+	EndTime           *time.Time `json:"end_time"`
+	Status            string     `json:"status"`
+	QuestionCount     int        `json:"question_count"`
+	CreatedBy         uint       `json:"created_by"`
+	CreatedAt         time.Time  `json:"created_at"`
+	// Student-only attempt state, populated on the exam list for students.
+	AttemptCount int        `json:"attempt_count"`
+	CanStart     bool       `json:"can_start"`
+	NextStartAt  *time.Time `json:"next_start_at,omitempty"`
 }
 
 // ExamQuestionResponse is one paper question (teacher/admin view includes answer).
 type ExamQuestionResponse struct {
-	ID      uint    `json:"id"`
-	Score   float64 `json:"score"`
+	ID       uint             `json:"id"`
+	Score    float64          `json:"score"`
 	Question QuestionResponse `json:"question"`
 }

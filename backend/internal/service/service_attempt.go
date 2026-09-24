@@ -20,11 +20,11 @@ import (
 // AttemptService handles taking, submitting and grading exams.
 type AttemptService struct {
 	baseService
-	examRepo    ExamRepo
+	examRepo     ExamRepo
 	questionRepo QuestionRepo
-	attemptRepo AttemptRepo
-	answerRepo  AnswerRepo
-	wrongRepo   WrongRepo
+	attemptRepo  AttemptRepo
+	answerRepo   AnswerRepo
+	wrongRepo    WrongRepo
 }
 
 // NewAttemptService constructs AttemptService.
@@ -67,6 +67,25 @@ func (s *AttemptService) Start(ctx context.Context, studentID, examID uint) (*dt
 		return s.startResponse(ctx, existing, exam)
 	} else if !errors.Is(err, repository.ErrNotFound) {
 		return nil, fmt.Errorf("find in progress attempt: %w", err)
+	}
+
+	// A new attempt consumes one of the allowed tries; resuming above does not.
+	submitted, err := s.attemptRepo.CountSubmittedAttempts(ctx, examID, studentID)
+	if err != nil {
+		return nil, fmt.Errorf("count submitted attempts: %w", err)
+	}
+	if exam.MaxAttempts > 0 && int(submitted) >= exam.MaxAttempts {
+		return nil, fmt.Errorf("%w: 已达到作答次数上限（%d 次）", ErrValidation, exam.MaxAttempts)
+	}
+	if exam.RetakeWaitMinutes > 0 && submitted > 0 {
+		if last, err := s.attemptRepo.FindLatestSubmittedAttempt(ctx, examID, studentID); err == nil && last.SubmittedAt != nil {
+			next := last.SubmittedAt.Add(time.Duration(exam.RetakeWaitMinutes) * time.Minute)
+			if next.After(now) {
+				return nil, fmt.Errorf("%w: 距离上次交卷需等待 %d 分钟，可于 %s 后再次开始", ErrValidation, exam.RetakeWaitMinutes, next.Format("2006-01-02 15:04"))
+			}
+		} else if err != nil && !errors.Is(err, repository.ErrNotFound) {
+			return nil, fmt.Errorf("find latest submitted attempt: %w", err)
+		}
 	}
 
 	items, err := s.examRepo.ListExamQuestions(ctx, examID)

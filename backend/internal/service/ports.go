@@ -46,6 +46,8 @@ type AttemptRepo interface {
 	FindAttemptByID(ctx context.Context, id uint) (*model.ExamAttempt, error)
 	UpdateAttempt(ctx context.Context, a *model.ExamAttempt) error
 	FindInProgressAttempt(ctx context.Context, examID, studentID uint) (*model.ExamAttempt, error)
+	CountSubmittedAttempts(ctx context.Context, examID, studentID uint) (int64, error)
+	FindLatestSubmittedAttempt(ctx context.Context, examID, studentID uint) (*model.ExamAttempt, error)
 	ListAttemptsByStudent(ctx context.Context, studentID, examID uint, page, pageSize int) ([]model.ExamAttempt, int64, error)
 	ListAttemptsByExam(ctx context.Context, examID uint) ([]model.ExamAttempt, error)
 }

@@ -55,6 +55,30 @@ func (r *Repository) FindInProgressAttempt(ctx context.Context, examID, studentI
 	return &a, nil
 }
 
+// CountSubmittedAttempts returns how many times the student has submitted the exam.
+func (r *Repository) CountSubmittedAttempts(ctx context.Context, examID, studentID uint) (int64, error) {
+	var total int64
+	err := r.db.WithContext(ctx).Model(&model.ExamAttempt{}).
+		Where("exam_id = ? AND student_id = ? AND status = ?", examID, studentID, "submitted").
+		Count(&total).Error
+	if err != nil {
+		return 0, fmt.Errorf("count submitted attempts: %w", err)
+	}
+	return total, nil
+}
+
+// FindLatestSubmittedAttempt returns the student's most recent submitted attempt for an exam.
+func (r *Repository) FindLatestSubmittedAttempt(ctx context.Context, examID, studentID uint) (*model.ExamAttempt, error) {
+	var a model.ExamAttempt
+	err := r.db.WithContext(ctx).
+		Where("exam_id = ? AND student_id = ? AND status = ?", examID, studentID, "submitted").
+		Order("id DESC").First(&a).Error
+	if err != nil {
+		return nil, wrapQuery("find latest submitted attempt", err)
+	}
+	return &a, nil
+}
+
 // ListAttemptsByStudent returns a page of attempts for a student.
 func (r *Repository) ListAttemptsByStudent(ctx context.Context, studentID, examID uint, page, pageSize int) ([]model.ExamAttempt, int64, error) {
 	q := r.db.WithContext(ctx).Model(&model.ExamAttempt{}).Where("student_id = ?", studentID)

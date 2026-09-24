@@ -18,11 +18,12 @@ type ExamService struct {
 	baseService
 	repo         ExamRepo
 	questionRepo QuestionRepo
+	attemptRepo  AttemptRepo
 }
 
 // NewExamService constructs ExamService.
-func NewExamService(repo ExamRepo, questionRepo QuestionRepo, logger *slog.Logger) *ExamService {
-	return &ExamService{baseService: NewBaseService(logger), repo: repo, questionRepo: questionRepo}
+func NewExamService(repo ExamRepo, questionRepo QuestionRepo, attemptRepo AttemptRepo, logger *slog.Logger) *ExamService {
+	return &ExamService{baseService: NewBaseService(logger), repo: repo, questionRepo: questionRepo, attemptRepo: attemptRepo}
 }
 
 // Create builds an exam and auto-generates its paper.
@@ -57,15 +58,26 @@ func (s *ExamService) Create(ctx context.Context, createdBy uint, req dto.ExamCr
 		return nil, fmt.Errorf("%w: 总分 %.2f 与各题型分值之和 %.2f 不一致", ErrValidation, req.TotalScore, computedTotal)
 	}
 
+	maxAttempts := req.MaxAttempts
+	if maxAttempts <= 0 {
+		maxAttempts = 1
+	}
+	retakeWait := req.RetakeWaitMinutes
+	if retakeWait < 0 {
+		retakeWait = 0
+	}
+
 	exam := &model.Exam{
-		Title:           req.Title,
-		Description:     req.Description,
-		TotalScore:      computedTotal,
-		DurationMinutes: req.DurationMinutes,
-		StartTime:       req.StartTime,
-		EndTime:         req.EndTime,
-		Status:          constants.ExamDraft,
-		CreatedBy:       createdBy,
+		Title:             req.Title,
+		Description:       req.Description,
+		TotalScore:        computedTotal,
+		DurationMinutes:   req.DurationMinutes,
+		MaxAttempts:       maxAttempts,
+		RetakeWaitMinutes: retakeWait,
+		StartTime:         req.StartTime,
+		EndTime:           req.EndTime,
+		Status:            constants.ExamDraft,
+		CreatedBy:         createdBy,
 	}
 	if err := s.repo.CreateExam(ctx, exam); err != nil {
 		return nil, fmt.Errorf("create exam: %w", err)
@@ -105,6 +117,9 @@ func (s *ExamService) List(ctx context.Context, role string, userID uint, query 
 		resp, err := s.toResponse(ctx, &exams[i])
 		if err != nil {
 			return dto.PageResult{}, err
+		}
+		if role == constants.RoleStudent {
+			s.fillStudentState(ctx, resp, &exams[i], userID)
 		}
 		items = append(items, *resp)
 	}
@@ -226,16 +241,52 @@ func (s *ExamService) toResponse(ctx context.Context, exam *model.Exam) (*dto.Ex
 		return nil, fmt.Errorf("count exam questions: %w", err)
 	}
 	return &dto.ExamResponse{
-		ID:              exam.ID,
-		Title:           exam.Title,
-		Description:     exam.Description,
-		TotalScore:      exam.TotalScore,
-		DurationMinutes: exam.DurationMinutes,
-		StartTime:       exam.StartTime,
-		EndTime:         exam.EndTime,
-		Status:          exam.Status,
-		QuestionCount:   int(count),
-		CreatedBy:       exam.CreatedBy,
-		CreatedAt:       exam.CreatedAt,
+		ID:                exam.ID,
+		Title:             exam.Title,
+		Description:       exam.Description,
+		TotalScore:        exam.TotalScore,
+		DurationMinutes:   exam.DurationMinutes,
+		MaxAttempts:       exam.MaxAttempts,
+		RetakeWaitMinutes: exam.RetakeWaitMinutes,
+		StartTime:         exam.StartTime,
+		EndTime:           exam.EndTime,
+		Status:            exam.Status,
+		QuestionCount:     int(count),
+		CreatedBy:         exam.CreatedBy,
+		CreatedAt:         exam.CreatedAt,
 	}, nil
+}
+
+// fillStudentState annotates an exam response with the student's attempt usage.
+func (s *ExamService) fillStudentState(ctx context.Context, resp *dto.ExamResponse, exam *model.Exam, studentID uint) {
+	if _, err := s.attemptRepo.FindInProgressAttempt(ctx, exam.ID, studentID); err == nil {
+		// Resuming an unfinished paper never consumes a new attempt.
+		resp.CanStart = true
+	}
+	submitted, err := s.attemptRepo.CountSubmittedAttempts(ctx, exam.ID, studentID)
+	if err != nil {
+		s.logger.Error("count submitted attempts", "exam_id", exam.ID, "student_id", studentID, "error", err)
+		return
+	}
+	resp.AttemptCount = int(submitted)
+	if resp.CanStart {
+		return
+	}
+	if exam.MaxAttempts > 0 && resp.AttemptCount >= exam.MaxAttempts {
+		resp.CanStart = false
+		return
+	}
+	resp.CanStart = true
+	if exam.RetakeWaitMinutes <= 0 || resp.AttemptCount == 0 {
+		return
+	}
+	last, err := s.attemptRepo.FindLatestSubmittedAttempt(ctx, exam.ID, studentID)
+	if err != nil || last.SubmittedAt == nil {
+		return
+	}
+	next := last.SubmittedAt.Add(time.Duration(exam.RetakeWaitMinutes) * time.Minute)
+	if next.After(time.Now()) {
+		resp.CanStart = false
+		resp.NextStartAt = &next
+	}
 }

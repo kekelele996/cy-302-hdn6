@@ -52,12 +52,17 @@ export interface Exam {
   description: string
   total_score: number
   duration_minutes: number
+  max_attempts: number
+  retake_wait_minutes: number
   start_time?: string | null
   end_time?: string | null
   status: 'draft' | 'published' | 'closed'
   question_count: number
   created_by: number
   created_at: string
+  attempt_count: number
+  can_start: boolean
+  next_start_at?: string | null
 }
 
 export interface PaperQuestionConfig {
@@ -72,6 +77,8 @@ export interface ExamCreatePayload {
   description: string
   duration_minutes: number
   total_score: number
+  max_attempts: number
+  retake_wait_minutes: number
   start_time?: string | null
   end_time?: string | null
   question_config: PaperQuestionConfig[]

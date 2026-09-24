@@ -11,6 +11,11 @@
       <el-table-column prop="duration_minutes" label="时长(分钟)" width="100" />
       <el-table-column prop="total_score" label="总分" width="80" />
       <el-table-column prop="question_count" label="题数" width="80" />
+      <el-table-column label="作答限制" min-width="150">
+        <template #default="{ row }">
+          最多 {{ row.max_attempts }} 次<template v-if="row.retake_wait_minutes > 0">，交卷后间隔 {{ row.retake_wait_minutes }} 分钟</template>
+        </template>
+      </el-table-column>
       <el-table-column label="状态" width="100">
         <template #default="{ row }">
           <el-tag :type="statusTag[row.status as keyof typeof statusTag]">{{ statusLabels[row.status as keyof typeof statusLabels] }}</el-tag>
@@ -19,7 +24,15 @@
       <el-table-column label="操作" min-width="300" fixed="right">
         <template #default="{ row }">
           <template v-if="isStudent">
-            <el-button v-if="row.status === 'published'" type="primary" size="small" @click="$router.push(`/exam/${row.id}/take`)">开始考试</el-button>
+            <template v-if="row.status === 'published'">
+              <el-button v-if="row.can_start" type="primary" size="small" @click="$router.push(`/exam/${row.id}/take`)">
+                {{ row.attempt_count > 0 ? '再次作答' : '开始考试' }}
+              </el-button>
+              <el-tooltip v-else-if="row.next_start_at" :content="`可于 ${formatTime(row.next_start_at)} 再次开始`" placement="top">
+                <el-tag type="warning" style="cursor: default">等待至 {{ formatTime(row.next_start_at) }}</el-tag>
+              </el-tooltip>
+              <el-tag v-else type="info">已达到作答次数上限</el-tag>
+            </template>
           </template>
           <template v-else>
             <el-button size="small" @click="viewQuestions(row)">题目</el-button>
@@ -57,6 +70,14 @@
         <el-form-item label="总分">
           <el-input-number v-model="form.total_score" :min="0" :step="1" />
           <span style="margin-left: 8px">（0 表示自动计算）</span>
+        </el-form-item>
+        <el-form-item label="作答次数">
+          <el-input-number v-model="form.max_attempts" :min="1" :max="100" />
+          <span style="margin-left: 8px">次（最多可交卷的次数）</span>
+        </el-form-item>
+        <el-form-item label="重考间隔">
+          <el-input-number v-model="form.retake_wait_minutes" :min="0" :max="10080" />
+          <span style="margin-left: 8px">分钟（每次交卷后需等待，0 表示不限制）</span>
         </el-form-item>
         <el-form-item label="组卷参数">
           <div style="width: 100%">
@@ -117,6 +138,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import dayjs from 'dayjs'
 import { examApi } from '../api'
 import { useAuthStore } from '../stores/auth'
 import type { Exam, PaperQuestionConfig, ExamStatResponse } from '../types'
@@ -152,6 +174,8 @@ const form = reactive({
   description: '',
   duration_minutes: 60,
   total_score: 100,
+  max_attempts: 1,
+  retake_wait_minutes: 0,
   question_config: [] as PaperQuestionConfig[]
 })
 
@@ -159,11 +183,17 @@ function addConfig() {
   form.question_config.push({ type: 'single', count: 5, score: 2, difficulty: 'easy' })
 }
 
+function formatTime(v?: string | null) {
+  return v ? dayjs(v).format('YYYY-MM-DD HH:mm') : '-'
+}
+
 function openCreate() {
   form.title = ''
   form.description = ''
   form.duration_minutes = 60
   form.total_score = 100
+  form.max_attempts = 1
+  form.retake_wait_minutes = 0
   form.question_config = [
     { type: 'single', count: 5, score: 2, difficulty: 'easy' },
     { type: 'true_false', count: 5, score: 1, difficulty: 'easy' }
@@ -179,6 +209,8 @@ async function onSave() {
       description: form.description,
       duration_minutes: form.duration_minutes,
       total_score: form.total_score,
+      max_attempts: form.max_attempts,
+      retake_wait_minutes: form.retake_wait_minutes,
       question_config: form.question_config
     })
     ElMessage.success('创建成功')

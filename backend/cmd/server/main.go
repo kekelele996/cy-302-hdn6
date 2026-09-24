@@ -46,7 +46,7 @@ func main() {
 	authService := service.NewAuthService(repo, cfg, logger)
 	userService := service.NewUserService(repo, logger)
 	questionService := service.NewQuestionService(repo, logger)
-	examService := service.NewExamService(repo, repo, logger)
+	examService := service.NewExamService(repo, repo, repo, logger)
 	attemptService := service.NewAttemptService(repo, repo, repo, repo, repo, logger)
 	statsService := service.NewStatsService(repo, logger)
 	wrongService := service.NewWrongQuestionService(repo, repo, logger)
