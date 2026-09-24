@@ -8,18 +8,18 @@ import (
 
 // Config holds all environment-driven application settings.
 type Config struct {
-	AppEnv           string `env:"APP_ENV" envDefault:"development"`
-	ServerPort       int    `env:"SERVER_PORT" envDefault:"8080"`
-	DBHost           string `env:"DB_HOST" envDefault:"127.0.0.1"`
-	DBPort           int    `env:"DB_PORT" envDefault:"3306"`
-	DBUser           string `env:"DB_USER" envDefault:"gbexam"`
-	DBPassword       string `env:"DB_PASSWORD" envDefault:"gbexam123"`
-	DBName           string `env:"DB_NAME" envDefault:"gbexam"`
-	JWTSecret        string `env:"JWT_SECRET" envDefault:"gbexam-dev-secret-change-me"`
-	JWTExpireHours   int    `env:"JWT_EXPIRE_HOURS" envDefault:"24"`
-	AdminUsername    string `env:"ADMIN_USERNAME" envDefault:"admin"`
-	AdminPassword    string `env:"ADMIN_PASSWORD" envDefault:"admin123"`
-	CORSAllowOrigin  string `env:"CORS_ALLOW_ORIGIN" envDefault:"*"`
+	AppEnv          string `env:"APP_ENV" envDefault:"development"`
+	ServerPort      int    `env:"SERVER_PORT" envDefault:"8080"`
+	DBHost          string `env:"DB_HOST" envDefault:"127.0.0.1"`
+	DBPort          int    `env:"DB_PORT" envDefault:"3306"`
+	DBUser          string `env:"DB_USER" envDefault:"gbexam"`
+	DBPassword      string `env:"DB_PASSWORD" envDefault:"gbexam123"`
+	DBName          string `env:"DB_NAME" envDefault:"gbexam"`
+	JWTSecret       string `env:"JWT_SECRET" envDefault:"gbexam-dev-secret-change-me"`
+	JWTExpireHours  int    `env:"JWT_EXPIRE_HOURS" envDefault:"24"`
+	AdminUsername   string `env:"ADMIN_USERNAME" envDefault:"admin"`
+	AdminPassword   string `env:"ADMIN_PASSWORD" envDefault:"admin123"`
+	CORSAllowOrigin string `env:"CORS_ALLOW_ORIGIN" envDefault:"*"`
 }
 
 // Load reads configuration from environment variables.

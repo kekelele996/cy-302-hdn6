@@ -9,6 +9,13 @@
       <el-table-column prop="id" label="ID" width="70" />
       <el-table-column prop="title" label="考试名称" min-width="180" />
       <el-table-column prop="duration_minutes" label="时长(分钟)" width="100" />
+      <el-table-column label="作答限制" min-width="150">
+        <template #default="{ row }">
+          <div>最多 {{ row.max_attempts || 1 }} 次</div>
+          <div v-if="row.wait_minutes > 0" class="limit-sub">交卷后等待 {{ row.wait_minutes }} 分钟</div>
+          <div v-else class="limit-sub">交卷后可立即补考</div>
+        </template>
+      </el-table-column>
       <el-table-column prop="total_score" label="总分" width="80" />
       <el-table-column prop="question_count" label="题数" width="80" />
       <el-table-column label="状态" width="100">
@@ -16,10 +23,25 @@
           <el-tag :type="statusTag[row.status as keyof typeof statusTag]">{{ statusLabels[row.status as keyof typeof statusLabels] }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" min-width="300" fixed="right">
+      <el-table-column label="操作" min-width="320" fixed="right">
         <template #default="{ row }">
           <template v-if="isStudent">
-            <el-button v-if="row.status === 'published'" type="primary" size="small" @click="$router.push(`/exam/${row.id}/take`)">开始考试</el-button>
+            <template v-if="row.status === 'published'">
+              <el-button v-if="row.attempt_state === 'in_progress'" type="primary" size="small" @click="$router.push(`/exam/${row.id}/take`)">继续作答</el-button>
+              <el-button v-else-if="row.attempt_state === 'available'" type="primary" size="small" @click="$router.push(`/exam/${row.id}/take`)">开始考试</el-button>
+              <el-tooltip v-else-if="row.attempt_state === 'waiting'" :content="`可再次开始时间：${formatTime(row.next_start_at)}`" placement="top">
+                <span><el-button type="info" size="small" disabled style="pointer-events: auto; cursor: not-allowed">等待补考</el-button></span>
+              </el-tooltip>
+              <el-tooltip v-else-if="row.attempt_state === 'reached_limit'" content="已达到作答次数上限" placement="top">
+                <span><el-button type="info" size="small" disabled style="pointer-events: auto; cursor: not-allowed">次数已用完</el-button></span>
+              </el-tooltip>
+              <el-tag
+                v-if="row.attempt_state"
+                size="small"
+                :type="attemptTagType(row.attempt_state)"
+                style="margin-left: 6px"
+              >{{ attemptHint(row) }}</el-tag>
+            </template>
           </template>
           <template v-else>
             <el-button size="small" @click="viewQuestions(row)">题目</el-button>
@@ -53,6 +75,14 @@
         <el-form-item label="考试时长">
           <el-input-number v-model="form.duration_minutes" :min="1" />
           <span style="margin-left: 8px">分钟</span>
+        </el-form-item>
+        <el-form-item label="最多作答次数">
+          <el-input-number v-model="form.max_attempts" :min="1" :max="20" />
+          <span style="margin-left: 8px">次（默认 1 次）</span>
+        </el-form-item>
+        <el-form-item label="交卷后等待">
+          <el-input-number v-model="form.wait_minutes" :min="0" :max="10080" />
+          <span style="margin-left: 8px">分钟后才能再次开始（默认 0，即可立即补考）</span>
         </el-form-item>
         <el-form-item label="总分">
           <el-input-number v-model="form.total_score" :min="0" :step="1" />
@@ -116,6 +146,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
+import dayjs from 'dayjs'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { examApi } from '../api'
 import { useAuthStore } from '../stores/auth'
@@ -151,6 +182,8 @@ const form = reactive({
   title: '',
   description: '',
   duration_minutes: 60,
+  max_attempts: 1,
+  wait_minutes: 0,
   total_score: 100,
   question_config: [] as PaperQuestionConfig[]
 })
@@ -159,15 +192,21 @@ function addConfig() {
   form.question_config.push({ type: 'single', count: 5, score: 2, difficulty: 'easy' })
 }
 
-function openCreate() {
+function resetForm() {
   form.title = ''
   form.description = ''
   form.duration_minutes = 60
+  form.max_attempts = 1
+  form.wait_minutes = 0
   form.total_score = 100
   form.question_config = [
     { type: 'single', count: 5, score: 2, difficulty: 'easy' },
     { type: 'true_false', count: 5, score: 1, difficulty: 'easy' }
   ]
+}
+
+function openCreate() {
+  resetForm()
   dialogVisible.value = true
 }
 
@@ -178,6 +217,8 @@ async function onSave() {
       title: form.title,
       description: form.description,
       duration_minutes: form.duration_minutes,
+      max_attempts: form.max_attempts,
+      wait_minutes: form.wait_minutes,
       total_score: form.total_score,
       question_config: form.question_config
     })
@@ -229,10 +270,50 @@ async function load() {
   }
 }
 
+function formatTime(v?: string | null) {
+  return v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-'
+}
+
+// attemptHint 返回考生列表中作答次数相关的提示文案。
+function attemptHint(row: Exam): string {
+  const used = row.used_attempts ?? 0
+  const max = row.max_attempts || 1
+  switch (row.attempt_state) {
+    case 'in_progress':
+      return '有未交卷试卷，可继续作答（不占用新次数）'
+    case 'waiting':
+      return `已作答 ${used}/${max} 次，可再次开始：${formatTime(row.next_start_at)}`
+    case 'reached_limit':
+      return `已达到作答次数上限（${max} 次）`
+    case 'available':
+      return used > 0 ? `已作答 ${used}/${max} 次，可再次开始` : `可作答 ${max} 次`
+    default:
+      return ''
+  }
+}
+
+function attemptTagType(state: string): 'success' | 'info' | 'warning' | 'danger' {
+  switch (state) {
+    case 'in_progress':
+      return 'warning'
+    case 'waiting':
+      return 'info'
+    case 'reached_limit':
+      return 'danger'
+    default:
+      return 'success'
+  }
+}
+
 onMounted(load)
 </script>
 
 <style scoped>
+.limit-sub {
+  font-size: 12px;
+  color: #909399;
+  line-height: 1.4;
+}
 .config-row {
   display: flex;
   gap: 8px;

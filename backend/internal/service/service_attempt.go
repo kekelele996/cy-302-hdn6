@@ -20,11 +20,11 @@ import (
 // AttemptService handles taking, submitting and grading exams.
 type AttemptService struct {
 	baseService
-	examRepo    ExamRepo
+	examRepo     ExamRepo
 	questionRepo QuestionRepo
-	attemptRepo AttemptRepo
-	answerRepo  AnswerRepo
-	wrongRepo   WrongRepo
+	attemptRepo  AttemptRepo
+	answerRepo   AnswerRepo
+	wrongRepo    WrongRepo
 }
 
 // NewAttemptService constructs AttemptService.
@@ -67,6 +67,26 @@ func (s *AttemptService) Start(ctx context.Context, studentID, examID uint) (*dt
 		return s.startResponse(ctx, existing, exam)
 	} else if !errors.Is(err, repository.ErrNotFound) {
 		return nil, fmt.Errorf("find in progress attempt: %w", err)
+	}
+
+	NormalizeExamPolicy(exam)
+	policy := AttemptPolicy{}
+	policy.UsedAttempts, err = s.attemptRepo.CountSubmittedAttempts(ctx, examID, studentID)
+	if err != nil {
+		return nil, fmt.Errorf("count submitted attempts: %w", err)
+	}
+	if policy.UsedAttempts > 0 {
+		latest, latestErr := s.attemptRepo.FindLatestSubmittedAttempt(ctx, examID, studentID)
+		if latestErr != nil {
+			if !errors.Is(latestErr, repository.ErrNotFound) {
+				return nil, fmt.Errorf("find latest submitted attempt: %w", latestErr)
+			}
+		} else {
+			policy.LatestSubmittedAt = latest.SubmittedAt
+		}
+	}
+	if err := checkStartPolicy(exam, policy, now); err != nil {
+		return nil, err
 	}
 
 	items, err := s.examRepo.ListExamQuestions(ctx, examID)

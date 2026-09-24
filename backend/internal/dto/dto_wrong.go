@@ -47,8 +47,8 @@ type PracticeAnswerRequest struct {
 
 // PracticeResultItem reports one practice answer.
 type PracticeResultItem struct {
-	QuestionID uint  `json:"question_id"`
-	Correct    bool  `json:"correct"`
+	QuestionID uint    `json:"question_id"`
+	Correct    bool    `json:"correct"`
 	Score      float64 `json:"score"`
 }
 

@@ -9,6 +9,8 @@ type Exam struct {
 	Description     string     `gorm:"type:text" json:"description"`
 	TotalScore      float64    `gorm:"not null;default:0" json:"total_score"`
 	DurationMinutes int        `gorm:"not null;default:60" json:"duration_minutes"`
+	MaxAttempts     int        `gorm:"not null;default:1" json:"max_attempts"`
+	WaitMinutes     int        `gorm:"not null;default:0" json:"wait_minutes"`
 	StartTime       *time.Time `json:"start_time"`
 	EndTime         *time.Time `json:"end_time"`
 	Status          string     `gorm:"size:16;not null;default:draft;index" json:"status"`

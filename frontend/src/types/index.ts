@@ -52,12 +52,21 @@ export interface Exam {
   description: string
   total_score: number
   duration_minutes: number
+  max_attempts: number
+  wait_minutes: number
   start_time?: string | null
   end_time?: string | null
   status: 'draft' | 'published' | 'closed'
   question_count: number
   created_by: number
   created_at: string
+  // 学生视角的作答次数状态（教师/管理员列表中不返回）
+  has_in_progress?: boolean
+  used_attempts?: number
+  latest_submitted_at?: string | null
+  can_start?: boolean
+  next_start_at?: string | null
+  attempt_state?: 'available' | 'in_progress' | 'waiting' | 'reached_limit'
 }
 
 export interface PaperQuestionConfig {
@@ -71,6 +80,8 @@ export interface ExamCreatePayload {
   title: string
   description: string
   duration_minutes: number
+  max_attempts: number
+  wait_minutes: number
   total_score: number
   start_time?: string | null
   end_time?: string | null

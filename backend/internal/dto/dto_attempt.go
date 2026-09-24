@@ -15,14 +15,14 @@ type ExamQuestionView struct {
 
 // AttemptStartResponse returns the shuffled paper for a student.
 type AttemptStartResponse struct {
-	AttemptID        uint               `json:"attempt_id"`
-	ExamID           uint               `json:"exam_id"`
-	Title            string             `json:"title"`
-	DurationMinutes  int                `json:"duration_minutes"`
-	TotalScore       float64            `json:"total_score"`
-	StartedAt        time.Time          `json:"started_at"`
-	Deadline         time.Time          `json:"deadline"`
-	Questions        []ExamQuestionView `json:"questions"`
+	AttemptID       uint               `json:"attempt_id"`
+	ExamID          uint               `json:"exam_id"`
+	Title           string             `json:"title"`
+	DurationMinutes int                `json:"duration_minutes"`
+	TotalScore      float64            `json:"total_score"`
+	StartedAt       time.Time          `json:"started_at"`
+	Deadline        time.Time          `json:"deadline"`
+	Questions       []ExamQuestionView `json:"questions"`
 }
 
 // AnswerSubmitRequest saves one answer (optionally marks it).

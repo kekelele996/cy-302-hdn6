@@ -41,6 +41,8 @@ CREATE TABLE IF NOT EXISTS exams (
     description TEXT,
     total_score DOUBLE NOT NULL DEFAULT 0,
     duration_minutes INT NOT NULL DEFAULT 60,
+    max_attempts INT NOT NULL DEFAULT 1,
+    wait_minutes INT NOT NULL DEFAULT 0,
     start_time DATETIME(3) NULL,
     end_time DATETIME(3) NULL,
     status VARCHAR(16) NOT NULL DEFAULT 'draft',

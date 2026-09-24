@@ -15,6 +15,8 @@ type ExamCreateRequest struct {
 	Title           string                `json:"title" binding:"required,max=128"`
 	Description     string                `json:"description" binding:"max=2000"`
 	DurationMinutes int                   `json:"duration_minutes" binding:"required,min=1,max=1440"`
+	MaxAttempts     int                   `json:"max_attempts" binding:"omitempty,min=1,max=20"`
+	WaitMinutes     int                   `json:"wait_minutes" binding:"omitempty,min=0,max=10080"`
 	TotalScore      float64               `json:"total_score" binding:"omitempty,min=0"`
 	StartTime       *time.Time            `json:"start_time"`
 	EndTime         *time.Time            `json:"end_time"`
@@ -24,7 +26,7 @@ type ExamCreateRequest struct {
 // ExamListQuery filters exam list.
 type ExamListQuery struct {
 	PageQuery
-	Status string `form:"status" binding:"omitempty,oneof=draft published closed"`
+	Status  string `form:"status" binding:"omitempty,oneof=draft published closed"`
 	Keyword string `form:"keyword"`
 }
 
@@ -35,17 +37,27 @@ type ExamResponse struct {
 	Description     string     `json:"description"`
 	TotalScore      float64    `json:"total_score"`
 	DurationMinutes int        `json:"duration_minutes"`
+	MaxAttempts     int        `json:"max_attempts"`
+	WaitMinutes     int        `json:"wait_minutes"`
 	StartTime       *time.Time `json:"start_time"`
 	EndTime         *time.Time `json:"end_time"`
 	Status          string     `json:"status"`
 	QuestionCount   int        `json:"question_count"`
 	CreatedBy       uint       `json:"created_by"`
 	CreatedAt       time.Time  `json:"created_at"`
+
+	// Student-only attempt state, populated when listing/viewing exams as a student.
+	HasInProgress     bool       `json:"has_in_progress,omitempty"`
+	UsedAttempts      int        `json:"used_attempts,omitempty"`
+	LatestSubmittedAt *time.Time `json:"latest_submitted_at,omitempty"`
+	CanStart          bool       `json:"can_start,omitempty"`
+	NextStartAt       *time.Time `json:"next_start_at,omitempty"`
+	AttemptState      string     `json:"attempt_state,omitempty"`
 }
 
 // ExamQuestionResponse is one paper question (teacher/admin view includes answer).
 type ExamQuestionResponse struct {
-	ID      uint    `json:"id"`
-	Score   float64 `json:"score"`
+	ID       uint             `json:"id"`
+	Score    float64          `json:"score"`
 	Question QuestionResponse `json:"question"`
 }

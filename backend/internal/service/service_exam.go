@@ -18,11 +18,12 @@ type ExamService struct {
 	baseService
 	repo         ExamRepo
 	questionRepo QuestionRepo
+	attemptRepo  AttemptRepo
 }
 
 // NewExamService constructs ExamService.
-func NewExamService(repo ExamRepo, questionRepo QuestionRepo, logger *slog.Logger) *ExamService {
-	return &ExamService{baseService: NewBaseService(logger), repo: repo, questionRepo: questionRepo}
+func NewExamService(repo ExamRepo, questionRepo QuestionRepo, attemptRepo AttemptRepo, logger *slog.Logger) *ExamService {
+	return &ExamService{baseService: NewBaseService(logger), repo: repo, questionRepo: questionRepo, attemptRepo: attemptRepo}
 }
 
 // Create builds an exam and auto-generates its paper.
@@ -57,11 +58,22 @@ func (s *ExamService) Create(ctx context.Context, createdBy uint, req dto.ExamCr
 		return nil, fmt.Errorf("%w: 总分 %.2f 与各题型分值之和 %.2f 不一致", ErrValidation, req.TotalScore, computedTotal)
 	}
 
+	maxAttempts := req.MaxAttempts
+	if maxAttempts <= 0 {
+		maxAttempts = 1
+	}
+	waitMinutes := req.WaitMinutes
+	if waitMinutes < 0 {
+		waitMinutes = 0
+	}
+
 	exam := &model.Exam{
 		Title:           req.Title,
 		Description:     req.Description,
 		TotalScore:      computedTotal,
 		DurationMinutes: req.DurationMinutes,
+		MaxAttempts:     maxAttempts,
+		WaitMinutes:     waitMinutes,
 		StartTime:       req.StartTime,
 		EndTime:         req.EndTime,
 		Status:          constants.ExamDraft,
@@ -108,6 +120,11 @@ func (s *ExamService) List(ctx context.Context, role string, userID uint, query 
 		}
 		items = append(items, *resp)
 	}
+	if role == constants.RoleStudent && len(items) > 0 {
+		if err := s.enrichStudentStates(ctx, userID, items); err != nil {
+			return dto.PageResult{}, err
+		}
+	}
 	return dto.PageResult{Items: items, Total: total, Page: page, PageSize: pageSize}, nil
 }
 
@@ -123,7 +140,18 @@ func (s *ExamService) Get(ctx context.Context, role string, userID, id uint) (*d
 	if role == constants.RoleTeacher && exam.CreatedBy != userID {
 		return nil, ErrForbidden
 	}
-	return s.toResponse(ctx, exam)
+	resp, err := s.toResponse(ctx, exam)
+	if err != nil {
+		return nil, err
+	}
+	if role == constants.RoleStudent {
+		items := []dto.ExamResponse{*resp}
+		if err := s.enrichStudentStates(ctx, userID, items); err != nil {
+			return nil, err
+		}
+		resp = &items[0]
+	}
+	return resp, nil
 }
 
 // Publish makes a draft exam available to students.
@@ -225,12 +253,15 @@ func (s *ExamService) toResponse(ctx context.Context, exam *model.Exam) (*dto.Ex
 	if err != nil {
 		return nil, fmt.Errorf("count exam questions: %w", err)
 	}
+	NormalizeExamPolicy(exam)
 	return &dto.ExamResponse{
 		ID:              exam.ID,
 		Title:           exam.Title,
 		Description:     exam.Description,
 		TotalScore:      exam.TotalScore,
 		DurationMinutes: exam.DurationMinutes,
+		MaxAttempts:     exam.MaxAttempts,
+		WaitMinutes:     exam.WaitMinutes,
 		StartTime:       exam.StartTime,
 		EndTime:         exam.EndTime,
 		Status:          exam.Status,
@@ -238,4 +269,38 @@ func (s *ExamService) toResponse(ctx context.Context, exam *model.Exam) (*dto.Ex
 		CreatedBy:       exam.CreatedBy,
 		CreatedAt:       exam.CreatedAt,
 	}, nil
+}
+
+// enrichStudentStates fills in the student-specific attempt counters and
+// remaining/cooldown state so the exam list can show the limit hints.
+func (s *ExamService) enrichStudentStates(ctx context.Context, studentID uint, items []dto.ExamResponse) error {
+	examIDs := make([]uint, 0, len(items))
+	for i := range items {
+		examIDs = append(examIDs, items[i].ID)
+	}
+	states, err := s.attemptRepo.MapStudentAttemptStates(ctx, studentID, examIDs)
+	if err != nil {
+		return fmt.Errorf("map student attempt states: %w", err)
+	}
+	now := time.Now()
+	for i := range items {
+		exam := model.Exam{
+			MaxAttempts: items[i].MaxAttempts,
+			WaitMinutes: items[i].WaitMinutes,
+		}
+		state := states[items[i].ID]
+		policy := AttemptPolicy{
+			HasInProgress:     state.HasInProgress,
+			UsedAttempts:      state.SubmittedCount,
+			LatestSubmittedAt: state.LatestSubmittedAt,
+		}
+		statusName, canStart, nextStartAt := EvaluateAttemptPolicy(&exam, policy, now)
+		items[i].HasInProgress = policy.HasInProgress
+		items[i].UsedAttempts = policy.UsedAttempts
+		items[i].LatestSubmittedAt = policy.LatestSubmittedAt
+		items[i].CanStart = canStart
+		items[i].NextStartAt = nextStartAt
+		items[i].AttemptState = statusName
+	}
+	return nil
 }

@@ -9,10 +9,10 @@ const (
 
 // Question types
 const (
-	QuestionSingle     = "single"
-	QuestionMultiple   = "multiple"
-	QuestionTrueFalse  = "true_false"
-	QuestionFillBlank  = "fill_blank"
+	QuestionSingle      = "single"
+	QuestionMultiple    = "multiple"
+	QuestionTrueFalse   = "true_false"
+	QuestionFillBlank   = "fill_blank"
 	QuestionShortAnswer = "short_answer"
 )
 
